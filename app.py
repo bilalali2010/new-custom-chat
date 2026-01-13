@@ -47,11 +47,11 @@ st.set_page_config(
 )
 
 # -----------------------------
-# MOBILE-FRIENDLY WHATSAPP/INSTAGRAM CSS
+# CSS FOR MOBILE-FRIENDLY CHAT
 # -----------------------------
 st.markdown("""
 <style>
-/* Chat container */
+/* Chat container flex */
 .chat-container {
     max-width:700px;
     margin:auto;
@@ -144,7 +144,7 @@ if "booking_step" not in st.session_state:
 if "current_booking" not in st.session_state:
     st.session_state.current_booking = {}
 
-# Add greeting once
+# Add greeting once at the very start
 if len(st.session_state.messages) == 0:
     st.session_state.messages.append(
         {"role": "assistant", "content": "Hi! I’m Chat with Bilal 🤖. I can help you with IGCSE/A Levels info and booking appointments."}
@@ -201,8 +201,7 @@ if IS_ADMIN_PAGE:
                 st.sidebar.success("✅ Knowledge saved")
             else:
                 st.sidebar.warning("⚠️ No content to save")
-
-        # Hidden appointment viewer
+        # Hidden appointments
         st.sidebar.subheader("📅 Appointments (Hidden)")
         if st.session_state.appointments:
             for idx, appt in enumerate(st.session_state.appointments, start=1):
@@ -327,7 +326,7 @@ def respond_to_user(user_input):
         return bot_reply
 
 # -----------------------------
-# CHAT INPUT
+# CHAT INPUT AT BOTTOM
 # -----------------------------
 with st.container():
     user_input = st.chat_input("Type a message or book an appointment...")
