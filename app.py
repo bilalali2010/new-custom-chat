@@ -16,17 +16,15 @@ if not OPENROUTER_API_KEY:
     st.stop()
 
 KNOWLEDGE_FILE = "knowledge.txt"
+MAX_CONTEXT = 4500
 
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
-st.set_page_config(
-    page_title="Chat with Bilal",
-    layout="centered"
-)
+st.set_page_config(page_title="Chat with Bilal", layout="centered")
 
 # -----------------------------
-# WHATSAPP / INSTAGRAM STYLE CSS
+# WHATSAPP STYLE CSS
 # -----------------------------
 st.markdown("""
 <style>
@@ -39,7 +37,6 @@ st.markdown("""
     font-size: 18px;
     font-weight: bold;
     text-align: center;
-    z-index: 100;
     border-radius: 10px;
     margin-bottom: 10px;
 }
@@ -49,18 +46,14 @@ st.markdown("""
 }
 div[data-testid="stChatMessage"][data-role="user"] > div {
     background-color: #DCF8C6;
-    color: black;
     border-radius: 15px;
     padding: 10px 14px;
-    margin: 5px 0;
     max-width: 75%;
 }
 div[data-testid="stChatMessage"][data-role="assistant"] > div {
     background-color: #FFFFFF;
-    color: black;
     border-radius: 15px;
     padding: 10px 14px;
-    margin: 5px 0;
     max-width: 75%;
     border: 1px solid #eee;
 }
@@ -96,21 +89,17 @@ if os.path.exists(KNOWLEDGE_FILE):
 # -----------------------------
 # INTENT DETECTION
 # -----------------------------
-def detect_intent(text: str):
+def detect_intent(text):
     t = text.lower()
 
     if re.search(r"\b(book|appointment|meeting|schedule|call)\b", t):
         return "appointment"
-
-    if re.search(r"\b(hi|hello|hey|assalam|good morning|good evening)\b", t):
+    if re.search(r"\b(hi|hello|hey|assalam)\b", t):
         return "greeting"
-
-    if re.search(r"\b(thank|thanks|great|awesome|nice|good job)\b", t):
+    if re.search(r"\b(thank|thanks|great|nice)\b", t):
         return "appreciation"
-
-    if re.search(r"\b(who is|what is|define|history|elon musk|president|capital)\b", t):
+    if re.search(r"\b(who is|what is|elon musk|capital|history)\b", t):
         return "irrelevant"
-
     return "business"
 
 # -----------------------------
@@ -134,67 +123,44 @@ if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     intent = detect_intent(user_input)
 
-    # -----------------------------
-    # APPOINTMENT FLOW
-    # -----------------------------
+    # ---- Appointment Flow ----
     if intent == "appointment" or st.session_state.booking_step:
-
         if st.session_state.booking_step is None:
             st.session_state.booking_step = "name"
-            bot_reply = "Sure 👍 What is your **full name**?"
-
+            reply = "Sure 👍 What is your **full name**?"
         elif st.session_state.booking_step == "name":
             st.session_state.booking_data["name"] = user_input
             st.session_state.booking_step = "datetime"
-            bot_reply = "Please tell me your **preferred date & time** for the appointment."
-
+            reply = "Please share your **preferred date & time**."
         elif st.session_state.booking_step == "datetime":
             st.session_state.booking_data["datetime"] = user_input
             st.session_state.booking_step = "purpose"
-            bot_reply = "What is the **purpose** of this appointment?"
-
-        elif st.session_state.booking_step == "purpose":
+            reply = "What is the **purpose** of the appointment?"
+        else:
             st.session_state.booking_data["purpose"] = user_input
-
             st.session_state.appointments.append({
-                "name": st.session_state.booking_data["name"],
-                "datetime": st.session_state.booking_data["datetime"],
-                "purpose": st.session_state.booking_data["purpose"],
-                "created_at": datetime.now()
+                **st.session_state.booking_data,
+                "created": datetime.now()
             })
-
             st.session_state.booking_step = None
             st.session_state.booking_data = {}
+            reply = "✅ **Appointment booked successfully!** We’ll contact you soon."
 
-            bot_reply = "✅ **Your appointment has been booked successfully!**\n\nWe will contact you soon."
-
-    # -----------------------------
-    # GREETING
-    # -----------------------------
     elif intent == "greeting":
-        bot_reply = "Hello 👋 How can I assist you regarding IGCSE, A Levels, or appointments?"
+        reply = "Hello 👋 How can I help you with IGCSE, A Levels, or appointments?"
 
-    # -----------------------------
-    # APPRECIATION
-    # -----------------------------
     elif intent == "appreciation":
-        bot_reply = "Thank you! 😊 I’m always here to help."
+        reply = "Thank you 😊 Happy to help!"
 
-    # -----------------------------
-    # IRRELEVANT
-    # -----------------------------
     elif intent == "irrelevant":
-        bot_reply = (
-            "I’m sorry 🙏 I’m a **business-specific assistant**.\n\n"
+        reply = (
+            "I’m a **business-specific assistant**.\n\n"
             "I can help with:\n"
-            "• IGCSE / A Levels information\n"
-            "• Booking appointments\n"
-            "• Aspire System services"
+            "• IGCSE / A Levels info\n"
+            "• Aspire System services\n"
+            "• Booking appointments"
         )
 
-    # -----------------------------
-    # BUSINESS QUERY (AI)
-    # -----------------------------
     else:
         payload = {
             "model": "nvidia/nemotron-3-nano-30b-a3b:free",
@@ -202,9 +168,9 @@ if user_input:
                 {
                     "role": "system",
                     "content": (
-                        "You are Chat with Bilal, a STRICT business assistant for Aspire System. "
-                        "Answer ONLY using provided knowledge. "
-                        "DO NOT answer general knowledge questions."
+                        "You are Chat with Bilal, a STRICT business assistant. "
+                        "Use ONLY the provided knowledge. "
+                        "Refuse general knowledge questions."
                     )
                 },
                 {
@@ -226,14 +192,14 @@ if user_input:
                 json=payload,
                 timeout=30
             )
-            bot_reply = res.json()["choices"][0]["message"]["content"].strip()
+            reply = res.json()["choices"][0]["message"]["content"].strip()
         except:
-            bot_reply = "I couldn’t process that right now. Please try again."
+            reply = "Sorry, I couldn’t process that right now."
 
-    st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+    st.session_state.messages.append({"role": "assistant", "content": reply})
 
 # -----------------------------
-# ADMIN PANEL (HIDDEN)
+# ADMIN PANEL (?admin)
 # -----------------------------
 if "admin" in st.query_params:
     st.sidebar.header("🔐 Admin Panel")
@@ -248,17 +214,44 @@ if "admin" in st.query_params:
                 st.sidebar.error("Wrong password")
 
     if st.session_state.admin_unlocked:
-        st.sidebar.subheader("📅 Booked Appointments")
+        st.sidebar.subheader("📚 Knowledge Management")
 
+        pdfs = st.sidebar.file_uploader(
+            "Upload PDF Knowledge",
+            type="pdf",
+            accept_multiple_files=True
+        )
+
+        text_data = st.sidebar.text_area(
+            "Add Training Text",
+            height=150,
+            placeholder="Paste institute info here..."
+        )
+
+        if st.sidebar.button("💾 Save Knowledge"):
+            combined = ""
+            if pdfs:
+                for pdf in pdfs:
+                    reader = PyPDF2.PdfReader(pdf)
+                    for page in reader.pages:
+                        combined += page.extract_text() or ""
+            if text_data.strip():
+                combined += "\n\n" + text_data.strip()
+
+            combined = combined[:MAX_CONTEXT]
+
+            with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
+                f.write(combined)
+
+            st.sidebar.success("Knowledge saved successfully ✅")
+
+        st.sidebar.subheader("📅 Booked Appointments")
         if not st.session_state.appointments:
             st.sidebar.info("No appointments yet.")
         else:
             for a in st.session_state.appointments:
                 st.sidebar.markdown(
-                    f"""
-                    **Name:** {a['name']}  
-                    **Date/Time:** {a['datetime']}  
-                    **Purpose:** {a['purpose']}  
-                    ---
-                    """
+                    f"**Name:** {a['name']}\n\n"
+                    f"**Date/Time:** {a['datetime']}\n\n"
+                    f"**Purpose:** {a['purpose']}\n\n---"
                 )
