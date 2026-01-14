@@ -3,7 +3,6 @@ import os
 import requests
 import PyPDF2
 from datetime import datetime
-import random
 
 # -----------------------------
 # CONFIG
@@ -18,9 +17,9 @@ if not OPENROUTER_API_KEY:
 KNOWLEDGE_FILE = "knowledge.txt"
 MAX_CONTEXT = 4500
 
-FALLBACK_MESSAGES = [
+DOMAIN_FALLBACK = (
     "I’m here to help only with question about bilal and his skills and work."
-]
+)
 
 # -----------------------------
 # PAGE CONFIG
@@ -84,15 +83,15 @@ if os.path.exists(KNOWLEDGE_FILE):
 # -----------------------------
 # HELPERS
 # -----------------------------
-def is_relevant_query(text):
+def is_relevant_query(text: str) -> bool:
     keywords = [
-        "bilal", "skills", "work", "projects",
-        "experience", "ai", "chatbot",
-        "automation", "developer", "portfolio"
+        "bilal", "skill", "skills", "work", "project",
+        "experience", "ai", "chatbot", "automation",
+        "developer", "portfolio"
     ]
     return any(k in text.lower() for k in keywords)
 
-def is_urdu(text):
+def is_urdu(text: str) -> bool:
     return any('\u0600' <= c <= '\u06FF' for c in text)
 
 # -----------------------------
@@ -147,32 +146,22 @@ if IS_ADMIN_PAGE:
                 st.sidebar.write("Appointments:", len(f.readlines()))
 
 # -----------------------------
-# QUICK ACTION BUTTONS
-# -----------------------------
-st.markdown("### Quick Options")
-c1, c2, c3, c4 = st.columns(4)
-
-if c1.button("👤 About Bilal"):
-    user_input = "Tell me about Bilal"
-elif c2.button("🧠 Skills"):
-    user_input = "What skills does Bilal have?"
-elif c3.button("💼 Work"):
-    user_input = "Show Bilal work and projects"
-elif c4.button("📅 Book Appointment"):
-    user_input = "I want to book an appointment"
-else:
-    user_input = st.chat_input("Ask about Bilal, his skills, or work...")
-
-# -----------------------------
 # CHAT DISPLAY
 # -----------------------------
 def render_chat():
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     st.markdown('<div class="chat-header">CHAT WITH BILAL</div>', unsafe_allow_html=True)
+
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+
     st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------
+# CHAT INPUT
+# -----------------------------
+user_input = st.chat_input("Ask about Bilal, his skills, or his work...")
 
 # -----------------------------
 # CHAT LOGIC
@@ -185,7 +174,7 @@ if user_input:
     with st.chat_message("assistant"):
         with st.spinner("🤖 Generating response..."):
 
-            # Appointment flow
+            # Appointment booking flow
             if st.session_state.booking_step == "name":
                 st.session_state.client_name = user_input
                 st.session_state.booking_step = "time"
@@ -201,9 +190,11 @@ if user_input:
                 st.session_state.booking_step = "name"
                 bot_reply = "Sure! What is your name?"
 
+            # Domain restriction
             elif not is_relevant_query(user_input):
-                bot_reply = FALLBACK_MESSAGES[0]
+                bot_reply = DOMAIN_FALLBACK
 
+            # AI response
             else:
                 prompt = ""
                 if knowledge.strip():
@@ -248,7 +239,7 @@ if user_input:
                     data = res.json()
                     bot_reply = data["choices"][0]["message"]["content"].strip()
                 except Exception:
-                    bot_reply = FALLBACK_MESSAGES[0]
+                    bot_reply = DOMAIN_FALLBACK
 
             st.markdown(bot_reply)
 
