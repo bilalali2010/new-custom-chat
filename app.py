@@ -147,7 +147,7 @@ if "current_booking" not in st.session_state:
 # Add greeting once at the very start
 if len(st.session_state.messages) == 0:
     st.session_state.messages.append(
-        {"role": "assistant", "content": "Hi! I’m Chat with Bilal 🤖. I can help you with IGCSE/A Levels info and booking appointments."}
+        {"role": "assistant", "content": "Hi! I’m Chat with Bilal 🤖. I can help you with info about me and booking appointments."}
     )
 
 # -----------------------------
@@ -272,7 +272,7 @@ def respond_to_user(user_input):
         return handle_booking(user_input)
     intent = detect_intent(user_input_lower)
     if intent == "greeting":
-        return random.choice(["Hello! How can I assist you today?", "Hi there! Need help with IGCSE/A Levels or booking a meeting?"])
+        return random.choice(["Hello! How can I assist you today?", "Hi there! Need help or booking a meeting?"])
     elif intent == "appreciation":
         return random.choice(["You're welcome!", "Happy to help!", "Anytime!"])
     elif intent == "booking":
