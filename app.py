@@ -1,4 +1,4 @@
-import streamlit as st 
+import streamlit as st
 import os
 import requests
 import PyPDF2
@@ -60,6 +60,15 @@ for key in ["messages", "chat_history", "admin_unlocked", "booking_step", "memor
         st.session_state[key] = [] if key in ["messages", "chat_history", "memory"] else None
 
 # -----------------------------
+# INITIAL GREETING
+# -----------------------------
+if len(st.session_state.messages) == 0:
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": "Hi! I’m Bilal’s AI Assistant 🤖. Ask anything about Bilal, his skills, or his work."
+    })
+
+# -----------------------------
 # LOAD KNOWLEDGE
 # -----------------------------
 knowledge = ""
@@ -84,18 +93,8 @@ def is_greeting(text: str) -> bool:
 def is_urdu(text: str) -> bool:
     return any('\u0600' <= c <= '\u06FF' for c in text)
 
-def typewriter_effect(message_index: int, text: str):
-    """Update the last message in session_state.messages with typing effect."""
-    placeholder = st.empty()
-    message = ""
-    for char in text:
-        message += char
-        placeholder.markdown(message)
-        st.session_state.messages[message_index]["content"] = message
-        time.sleep(0.01)
-
 def get_bot_reply(user_input: str) -> str:
-    # Appointment booking flow
+    # 1️⃣ Appointment booking flow
     if st.session_state.booking_step == "name":
         st.session_state.client_name = user_input
         st.session_state.booking_step = "time"
@@ -111,26 +110,25 @@ def get_bot_reply(user_input: str) -> str:
         st.session_state.booking_step = "name"
         return "Sure! What is your name?"
 
-    # Greeting
+    # 2️⃣ Greeting response
     if is_greeting(user_input):
         return random.choice(GREETING_RESPONSES)
 
-    # Simple question
+    # 3️⃣ Simple questions
     simple_qs = ["what bilal do", "who is bilal", "bilal does what"]
     if any(q in user_input.lower() for q in simple_qs):
         return ("Bilal is a seasoned software engineer with over five years of experience, "
                 "specializing in full-stack development with JavaScript, Node.js, and React. "
                 "He builds scalable web applications, mentors developers, and implements DevOps practices.")
 
-    # Domain restriction
+    # 4️⃣ Domain restriction
     if not is_relevant_query(user_input):
         return DOMAIN_FALLBACK
 
-    # AI response
+    # 5️⃣ AI response using OpenRouter
     prompt = ""
     if knowledge.strip():
         prompt += f"Knowledge:\n{knowledge}\n\n"
-
     prompt += f"User Memory:\n{st.session_state.memory[-5:]}\n\n"
     prompt += f"Question:\n{user_input}\n"
     prompt += "\nRespond in Urdu." if is_urdu(user_input) else "\nRespond in English."
@@ -169,44 +167,83 @@ def get_bot_reply(user_input: str) -> str:
         return DOMAIN_FALLBACK
 
 # -----------------------------
+# ADMIN PANEL
+# -----------------------------
+IS_ADMIN_PAGE = "admin" in st.query_params
+if IS_ADMIN_PAGE:
+    st.sidebar.header("🔐 Admin Panel")
+    if not st.session_state.admin_unlocked:
+        pwd = st.sidebar.text_input("Admin Password", type="password")
+        if st.sidebar.button("Unlock"):
+            if pwd == ADMIN_PASSWORD:
+                st.session_state.admin_unlocked = True
+                st.experimental_rerun()
+            else:
+                st.sidebar.error("Wrong password")
+    else:
+        st.sidebar.success("Admin Unlocked")
+        uploaded_pdfs = st.sidebar.file_uploader(
+            "Upload Knowledge PDFs", type="pdf", accept_multiple_files=True
+        )
+        text_knowledge = st.sidebar.text_area("Add Training Text", height=150)
+        if st.sidebar.button("💾 Save Knowledge"):
+            combined = ""
+            if uploaded_pdfs:
+                for pdf in uploaded_pdfs:
+                    reader = PyPDF2.PdfReader(pdf)
+                    for page in reader.pages:
+                        combined += page.extract_text() or ""
+            if text_knowledge.strip():
+                combined += "\n\n" + text_knowledge.strip()
+            combined = combined[:MAX_CONTEXT]
+            if combined.strip():
+                with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
+                    f.write(combined)
+                st.sidebar.success("Knowledge saved")
+        st.sidebar.subheader("📊 Analytics")
+        st.sidebar.write("Total Chats:", len(st.session_state.chat_history))
+        if os.path.exists("appointments.txt"):
+            with open("appointments.txt") as f:
+                st.sidebar.write("Appointments:", len(f.readlines()))
+
+# -----------------------------
 # CHAT DISPLAY
 # -----------------------------
+def typewriter_effect(text: str):
+    placeholder = st.empty()
+    message = ""
+    for char in text:
+        message += char
+        placeholder.markdown(message)
+        time.sleep(0.01)
+
 def render_chat():
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     st.markdown('<div class="chat-header">CHAT WITH BILAL</div>', unsafe_allow_html=True)
 
-    # Show initial greeting if no messages
-    if not st.session_state.messages:
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": "Hi! I’m Bilal’s AI Assistant 🤖. Ask anything about Bilal, his skills, or his work."
-        })
-
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    for i, msg in enumerate(st.session_state.messages):
+        # Only last assistant message gets typewriter effect
+        if msg["role"] == "assistant" and i == len(st.session_state.messages) - 1:
+            typewriter_effect(msg["content"])
+        else:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
-# CHAT INPUT & LOGIC
+# CHAT INPUT
 # -----------------------------
 user_input = st.chat_input("Ask about Bilal, his skills, or his work...")
 
 if user_input:
-    # Append user message
+    # Add user message
     st.session_state.messages.append({"role": "user", "content": user_input})
     st.session_state.chat_history.append((user_input, "", datetime.now()))
     st.session_state.memory.append(user_input)
 
-    # Append empty assistant message
-    st.session_state.messages.append({"role": "assistant", "content": ""})
-    bot_index = len(st.session_state.messages) - 1
-
-    # Generate bot reply
+    # Get bot reply
     bot_reply = get_bot_reply(user_input)
-    typewriter_effect(bot_index, bot_reply)
-
-    # Update chat history
+    st.session_state.messages.append({"role": "assistant", "content": bot_reply})
     st.session_state.chat_history[-1] = (user_input, bot_reply, datetime.now())
 
 # -----------------------------
