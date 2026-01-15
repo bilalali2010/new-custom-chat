@@ -90,7 +90,7 @@ def typewriter_effect(text: str):
     for char in text:
         message += char
         placeholder.markdown(message)
-        time.sleep(0.01)  # faster typing effect
+        time.sleep(0.01)
 
 def get_bot_reply(user_input: str) -> str:
     # 1️⃣ Appointment booking flow
@@ -217,10 +217,9 @@ def render_chat():
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     st.markdown('<div class="chat-header">CHAT WITH BILAL</div>', unsafe_allow_html=True)
 
-    # Show initial greeting if no messages yet
+    # Show initial greeting ONLY if no messages exist
     if not st.session_state.messages:
-        with st.chat_message("assistant"):
-            st.markdown("Hi! I’m Bilal’s AI Assistant 🤖. Ask anything about Bilal, his skills, or his work.")
+        typewriter_effect("Hi! I’m Bilal’s AI Assistant 🤖. Ask anything about Bilal, his skills, or his work.")
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
