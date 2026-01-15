@@ -3,6 +3,7 @@ import os
 import requests
 import PyPDF2
 import time
+import random
 from datetime import datetime
 
 # -----------------------------
@@ -18,25 +19,20 @@ if not OPENROUTER_API_KEY:
 KNOWLEDGE_FILE = "knowledge.txt"
 MAX_CONTEXT = 4500
 
-DOMAIN_FALLBACK = (
-    "I’m here to help only with questions about Bilal, his skills, or his work. 🙂"
-)
+DOMAIN_FALLBACK = "I’m here to help only with questions about Bilal, his skills, or his work. 🙂"
 
 GREETING_KEYWORDS = ["hello", "hi", "hey", "greetings", "salam", "assalam"]
-
 GREETING_RESPONSES = [
     "Hello! 👋 How can I assist you about Bilal today?",
     "Hi there! Ask me anything about Bilal’s skills or work.",
-    "Hey! I’m Bilal’s AI assistant. How can I help?"
+    "Hey! I’m Bilal’s AI assistant. How can I help?",
+    "Greetings! 🤖 What would you like to know about Bilal?"
 ]
 
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
-st.set_page_config(
-    page_title="Chat with Bilal",
-    layout="centered"
-)
+st.set_page_config(page_title="Chat with Bilal", layout="centered")
 
 # -----------------------------
 # CSS
@@ -74,7 +70,9 @@ if "booking_step" not in st.session_state:
 if "memory" not in st.session_state:
     st.session_state.memory = []
 
-# Greeting (only once)
+# -----------------------------
+# INITIAL GREETING
+# -----------------------------
 if len(st.session_state.messages) == 0:
     st.session_state.messages.append({
         "role": "assistant",
@@ -107,86 +105,83 @@ def is_urdu(text: str) -> bool:
     return any('\u0600' <= c <= '\u06FF' for c in text)
 
 def typewriter_effect(text: str):
-    # Simulate typing
     placeholder = st.empty()
     message = ""
     for char in text:
         message += char
         placeholder.markdown(message)
         time.sleep(0.02)
-    return
 
 def get_bot_reply(user_input: str) -> str:
-    # Appointment booking flow
+    # 1️⃣ Appointment booking flow
     if st.session_state.booking_step == "name":
         st.session_state.client_name = user_input
         st.session_state.booking_step = "time"
         return "Thanks! What date and time do you prefer?"
 
-    elif st.session_state.booking_step == "time":
+    if st.session_state.booking_step == "time":
         with open("appointments.txt", "a") as f:
             f.write(f"{st.session_state.client_name} | {user_input}\n")
         st.session_state.booking_step = None
         return "✅ Appointment request saved. Bilal will contact you soon."
 
-    elif "appointment" in user_input.lower():
+    if "appointment" in user_input.lower():
         st.session_state.booking_step = "name"
         return "Sure! What is your name?"
 
-    # Greeting response
-    elif is_greeting(user_input):
-        return GREETING_RESPONSES[0]  # you can random.choice(GREETING_RESPONSES) if you want variety
+    # 2️⃣ Greeting response
+    if is_greeting(user_input):
+        return random.choice(GREETING_RESPONSES)
 
-    # Domain restriction
-    elif not is_relevant_query(user_input):
+    # 3️⃣ Domain restriction
+    if not is_relevant_query(user_input):
         return DOMAIN_FALLBACK
 
-    # AI response
+    # 4️⃣ AI response using OpenRouter
+    prompt = ""
+    if knowledge.strip():
+        prompt += f"Knowledge:\n{knowledge}\n\n"
+
+    prompt += f"User Memory:\n{st.session_state.memory[-5:]}\n\n"
+    prompt += f"Question:\n{user_input}\n"
+
+    if is_urdu(user_input):
+        prompt += "\nRespond in Urdu."
     else:
-        prompt = ""
-        if knowledge.strip():
-            prompt += f"Knowledge:\n{knowledge}\n\n"
+        prompt += "\nRespond in English."
 
-        prompt += f"User Memory:\n{st.session_state.memory[-5:]}\n\n"
-        prompt += f"Question:\n{user_input}\n"
+    payload = {
+        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a professional AI assistant representing Bilal. "
+                    "Answer confidently about Bilal’s skills, experience, and work. "
+                    "If the question is irrelevant, reply ONLY with: "
+                    "'I’m here to help only with questions about Bilal and his skills or work.'"
+                )
+            },
+            {"role": "user", "content": prompt}
+        ],
+        "max_output_tokens": 180,
+        "temperature": 0.4
+    }
 
-        if is_urdu(user_input):
-            prompt += "\nRespond in Urdu."
-        else:
-            prompt += "\nRespond in English."
-
-        payload = {
-            "model": "nvidia/nemotron-3-nano-30b-a3b:free",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a professional AI assistant representing Bilal. "
-                        "Answer confidently about Bilal’s skills, experience, and work. "
-                        "If the question is irrelevant, reply ONLY with: "
-                        "'I’m here to help only with questions about Bilal and his skills or work.'"
-                    )
-                },
-                {"role": "user", "content": prompt}
-            ],
-            "max_output_tokens": 180,
-            "temperature": 0.4
-        }
-
-        try:
-            res = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json=payload,
-                timeout=30
-            )
-            data = res.json()
-            return data["choices"][0]["message"]["content"].strip()
-        except Exception:
-            return DOMAIN_FALLBACK
+    try:
+        res = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json=payload,
+            timeout=30
+        )
+        data = res.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return DOMAIN_FALLBACK
 
 # -----------------------------
 # ADMIN PANEL
@@ -214,27 +209,21 @@ if IS_ADMIN_PAGE:
 
         if st.sidebar.button("💾 Save Knowledge"):
             combined = ""
-
             if uploaded_pdfs:
                 for pdf in uploaded_pdfs:
                     reader = PyPDF2.PdfReader(pdf)
                     for page in reader.pages:
                         combined += page.extract_text() or ""
-
             if text_knowledge.strip():
                 combined += "\n\n" + text_knowledge.strip()
-
             combined = combined[:MAX_CONTEXT]
-
             if combined.strip():
                 with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
                     f.write(combined)
                 st.sidebar.success("Knowledge saved")
 
-        # Analytics
         st.sidebar.subheader("📊 Analytics")
         st.sidebar.write("Total Chats:", len(st.session_state.chat_history))
-
         if os.path.exists("appointments.txt"):
             with open("appointments.txt") as f:
                 st.sidebar.write("Appointments:", len(f.readlines()))
@@ -245,11 +234,9 @@ if IS_ADMIN_PAGE:
 def render_chat():
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     st.markdown('<div class="chat-header">CHAT WITH BILAL</div>', unsafe_allow_html=True)
-
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
