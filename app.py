@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st 
 import os
 import requests
 import PyPDF2
@@ -55,29 +55,9 @@ st.markdown("""
 # -----------------------------
 # SESSION STATE
 # -----------------------------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-if "admin_unlocked" not in st.session_state:
-    st.session_state.admin_unlocked = False
-
-if "booking_step" not in st.session_state:
-    st.session_state.booking_step = None
-
-if "memory" not in st.session_state:
-    st.session_state.memory = []
-
-# -----------------------------
-# INITIAL GREETING
-# -----------------------------
-if len(st.session_state.messages) == 0:
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": "Hi! I’m Bilal’s AI Assistant 🤖. Ask anything about Bilal, his skills, or his work."
-    })
+for key in ["messages", "chat_history", "admin_unlocked", "booking_step", "memory"]:
+    if key not in st.session_state:
+        st.session_state[key] = [] if key in ["messages", "chat_history", "memory"] else None
 
 # -----------------------------
 # LOAD KNOWLEDGE
@@ -110,7 +90,7 @@ def typewriter_effect(text: str):
     for char in text:
         message += char
         placeholder.markdown(message)
-        time.sleep(0.02)
+        time.sleep(0.01)  # faster typing effect
 
 def get_bot_reply(user_input: str) -> str:
     # 1️⃣ Appointment booking flow
@@ -133,22 +113,25 @@ def get_bot_reply(user_input: str) -> str:
     if is_greeting(user_input):
         return random.choice(GREETING_RESPONSES)
 
-    # 3️⃣ Domain restriction
+    # 3️⃣ Simple question handling
+    simple_qs = ["what bilal do", "who is bilal", "bilal does what"]
+    if any(q in user_input.lower() for q in simple_qs):
+        return ("Bilal is a seasoned software engineer with over five years of experience, "
+                "specializing in full-stack development with JavaScript, Node.js, and React. "
+                "He builds scalable web applications, mentors developers, and implements DevOps practices.")
+
+    # 4️⃣ Domain restriction
     if not is_relevant_query(user_input):
         return DOMAIN_FALLBACK
 
-    # 4️⃣ AI response using OpenRouter
+    # 5️⃣ AI response using OpenRouter
     prompt = ""
     if knowledge.strip():
         prompt += f"Knowledge:\n{knowledge}\n\n"
 
     prompt += f"User Memory:\n{st.session_state.memory[-5:]}\n\n"
     prompt += f"Question:\n{user_input}\n"
-
-    if is_urdu(user_input):
-        prompt += "\nRespond in Urdu."
-    else:
-        prompt += "\nRespond in English."
+    prompt += "\nRespond in Urdu." if is_urdu(user_input) else "\nRespond in English."
 
     payload = {
         "model": "nvidia/nemotron-3-nano-30b-a3b:free",
@@ -187,7 +170,6 @@ def get_bot_reply(user_input: str) -> str:
 # ADMIN PANEL
 # -----------------------------
 IS_ADMIN_PAGE = "admin" in st.query_params
-
 if IS_ADMIN_PAGE:
     st.sidebar.header("🔐 Admin Panel")
 
@@ -234,6 +216,12 @@ if IS_ADMIN_PAGE:
 def render_chat():
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     st.markdown('<div class="chat-header">CHAT WITH BILAL</div>', unsafe_allow_html=True)
+
+    # Show initial greeting if no messages yet
+    if not st.session_state.messages:
+        with st.chat_message("assistant"):
+            st.markdown("Hi! I’m Bilal’s AI Assistant 🤖. Ask anything about Bilal, his skills, or his work.")
+
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
